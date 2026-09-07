@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from './supabase';
 import { 
   Calendar as CalendarIcon, DollarSign, Users, ArrowRightLeft, 
-  Trash2, Menu, X, UserPlus, ChevronLeft, ChevronRight, LogOut, CheckCircle, Camera, Printer, FileText, ExternalLink, Sun, Moon, AlertCircle, Info
+  Trash2, Menu, X, UserPlus, ChevronLeft, ChevronRight, LogOut, CheckCircle, Camera, Printer, FileText, ExternalLink, Sun, Moon, AlertCircle, Info, Download
 } from 'lucide-react';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -110,7 +110,7 @@ const EventCard = ({ e, expenses, salaries, isOwner, handleDelete, handleMarkPai
                 {eExpensesList.map(exp => (
                   <li key={exp.id} className={`flex justify-between text-xs ${darkMode ? 'text-slate-300' : 'text-gray-600'}`}>
                     <span>• {exp.category} <span className={darkMode ? 'text-slate-500' : 'text-gray-400'}>{exp.description ? `(${exp.description})` : ''}</span></span>
-                    <span className="font-medium text-red-500">{formatCurrency(exp.amount)}</span>
+                    <span className="font-medium text-red-500">-{formatCurrency(exp.amount)}</span>
                   </li>
                 ))}
               </ul>
@@ -126,7 +126,7 @@ const EventCard = ({ e, expenses, salaries, isOwner, handleDelete, handleMarkPai
                 {eSalariesList.map(sal => (
                   <li key={sal.id} className={`flex justify-between text-xs ${darkMode ? 'text-slate-300' : 'text-gray-600'}`}>
                     <span>• {sal.person_name}</span>
-                    <span className="font-medium text-blue-500">{formatCurrency(sal.amount)}</span>
+                    <span className="font-medium text-red-500">-{formatCurrency(sal.amount)}</span>
                   </li>
                 ))}
               </ul>
@@ -147,6 +147,7 @@ function App() {
 
   const [darkMode, setDarkMode] = useState(false);
   const [popup, setPopup] = useState({ show: false, message: '', type: 'success', onConfirm: null });
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
 
   const showPopup = (message, type = 'success', onConfirm = null) => {
     setPopup({ show: true, message, type, onConfirm });
@@ -179,6 +180,26 @@ function App() {
 
   const [newMember, setNewMember] = useState({ full_name: '', phone: '', role: 'Camera Operator', bank_details: '' });
   const [newEquipment, setNewEquipment] = useState({ item_name: '', category: 'Camera', serial_number: '', condition: 'Good' });
+
+  // PWA Install Prompt Logic
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    }
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -336,7 +357,6 @@ function App() {
     });
   };
 
-  // --- NEW: Handle Mark Event as Paid ---
   const handleMarkPaid = (id) => {
     showPopup("සම්පූර්ණ මුදල ලැබුණු බව තහවුරු කරනවාද?", "confirm", async () => {
       const { error } = await supabase.from('events').update({ status: 'Completed' }).eq('id', id);
@@ -388,7 +408,7 @@ function App() {
   const pendingTransfers = transfers.filter(t => t.status !== 'Confirmed').reduce((sum, t) => sum + Number(t.amount), 0);
   const balanceToSend = allTimeNetProfit - (confirmedTransfers + pendingTransfers);
 
-  // Pending Receivables (Salli Enna Thiyena Gaana)
+  // Pending Receivables
   const totalPendingReceivables = events.reduce((sum, e) => {
     if (e.status !== 'Completed') {
       return sum + Math.max(0, Number(e.total_fee) - Number(e.advance_payment || 0));
@@ -713,6 +733,15 @@ function App() {
               {item.icon} <span>{item.label}</span>
             </button>
           ))}
+          
+          {/* NEW: INSTALL APP BUTTON */}
+          {deferredPrompt && (
+            <div className={`pt-4 mt-4 border-t ${darkMode ? 'border-slate-800' : 'border-slate-800'}`}>
+              <button onClick={handleInstallApp} className="flex items-center w-full px-4 py-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold shadow-md transition-all">
+                <Download className="w-5 h-5 mr-3" /> <span>Install App</span>
+              </button>
+            </div>
+          )}
         </nav>
 
         <div className={`p-4 border-t ${darkMode ? 'border-slate-800' : 'border-slate-800'}`}>
@@ -1193,7 +1222,7 @@ function App() {
                                   </div>
                                 </td>
                                 <td className={`p-4 font-bold text-base ${darkMode ? 'text-slate-200' : 'text-gray-900'}`}>
-                                  {formatCurrency(e.amount)}
+                                  -{formatCurrency(e.amount)}
                                 </td>
                                 <td className="p-4 text-right">
                                   {!isOwner && <button onClick={()=>handleDelete('salaries', e.id, setSalaries, salaries)} className={`p-2 rounded ${darkMode ? 'hover:bg-red-900/50 text-red-400' : 'hover:bg-red-100 text-red-500'}`}><Trash2 className="w-4 h-4"/></button>}
